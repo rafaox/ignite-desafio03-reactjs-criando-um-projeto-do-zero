@@ -136,9 +136,11 @@ export const getStaticProps: GetStaticProps = async context => {
   const response = await prismic.getByUID('posts', String(slug), {});
 
   const post = {
+    uid: response.uid,
     first_publication_date: response.first_publication_date,
     data: {
       title: response.data.title,
+      subtitle: 'Pensando em sincronização em vez de ciclos de vida',
       banner: {
         url: response.data.banner.url,
       },
