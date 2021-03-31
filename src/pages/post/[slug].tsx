@@ -1,5 +1,16 @@
 import { GetStaticPaths, GetStaticProps } from 'next';
+import { useRouter } from 'next/router';
 
+import { format } from 'date-fns';
+import ptBR from 'date-fns/locale/pt-BR';
+
+import { AiOutlineCalendar } from 'react-icons/ai';
+import { FiUser } from 'react-icons/fi';
+import { BiTimeFive } from 'react-icons/bi';
+import { RichText } from 'prismic-dom';
+import Prismic from '@prismicio/client';
+
+import Header from '../../components/Header';
 import { getPrismicClient } from '../../services/prismic';
 
 import commonStyles from '../../styles/common.module.scss';
@@ -26,20 +37,119 @@ interface PostProps {
   post: Post;
 }
 
-// export default function Post() {
-//   // TODO
-// }
+export default function Post({ post }: PostProps): JSX.Element {
+  const router = useRouter();
+  const { content } = post.data;
 
-// export const getStaticPaths = async () => {
-//   const prismic = getPrismicClient();
-//   const posts = await prismic.query(TODO);
+  function toEStimateTime(): number {
+    let accumullated = 0;
+    // eslint-disable-next-line array-callback-return
+    content.map(data => {
+      accumullated += data.heading.split(' ').length;
+      // eslint-disable-next-line array-callback-return
+      data.body.map(d => {
+        accumullated += d.text.split(' ').length;
+      });
+    });
+    return Math.ceil(accumullated / 200);
+  }
 
-//   // TODO
-// };
+  const estimatedTime = toEStimateTime();
 
-// export const getStaticProps = async context => {
-//   const prismic = getPrismicClient();
-//   const response = await prismic.getByUID(TODO);
+  if (router.isFallback) {
+    return <div>Carregando...</div>;
+  }
 
-//   // TODO
-// };
+  return (
+    <>
+      <Header />
+
+      <main className={styles.container}>
+        <section className={styles.bannerContainer}>
+          <img src={post.data.banner.url} alt="banner" />
+        </section>
+
+        <article
+          key={Math.random() * post.data.title.length}
+          className={styles.post}
+        >
+          <h1>{post.data.title}</h1>
+
+          <div className={styles.postInfo}>
+            <AiOutlineCalendar />
+            <time>
+              {format(new Date(post.first_publication_date), 'dd MMM yyyy', {
+                locale: ptBR,
+              })}
+            </time>
+
+            <FiUser />
+            <p>{post.data.author}</p>
+
+            <BiTimeFive />
+            <time>{estimatedTime} min</time>
+          </div>
+
+          {post.data.content.map(contentData => (
+            <>
+              <div
+                key={Math.random() * contentData.heading.split(' ').length}
+                className={styles.contentContainer}
+              >
+                <h2 className={styles.contentHeading}>{contentData.heading}</h2>
+                <div
+                  className={styles.postContent}
+                  // eslint-disable-next-line react/no-danger
+                  dangerouslySetInnerHTML={{
+                    __html: RichText.asHtml(contentData.body),
+                  }}
+                />
+              </div>
+            </>
+          ))}
+        </article>
+      </main>
+    </>
+  );
+}
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const prismic = getPrismicClient();
+  const posts = await prismic.query(
+    Prismic.Predicates.at('document.type', 'posts')
+  );
+
+  const paths = posts.results.map(post => {
+    return { params: { slug: post.uid } };
+  });
+
+  return {
+    paths,
+    fallback: true,
+  };
+};
+
+export const getStaticProps: GetStaticProps = async context => {
+  const { slug } = context.params;
+
+  const prismic = getPrismicClient();
+  const response = await prismic.getByUID('posts', String(slug), {});
+
+  const post = {
+    first_publication_date: response.first_publication_date,
+    data: {
+      title: response.data.title,
+      banner: {
+        url: response.data.banner.url,
+      },
+      author: response.data.author,
+      content: response.data.content,
+    },
+  };
+
+  return {
+    props: {
+      post,
+    },
+  };
+};
